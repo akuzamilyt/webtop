@@ -18,12 +18,12 @@ export default async function handler(req, res) {
     const sign = crypto.createHash('md5').update(apiId + apiKey).digest('hex');
 
     // 3. Mengambil parameter dari request front-end
-    // Contoh: /api/products?type=pulsa&operator=telkomsel
-    const { type, operator } = req.query;
+    // Contoh: /api/products?type=pulsa_paket&operator=telkomsel
+    const { operator } = req.query;
 
-    // Validasi input: pastikan 'type' dan 'operator' dikirim oleh front-end
-    if (!type || !operator) {
-        return res.status(400).json({ error: 'Parameter "type" dan "operator" dibutuhkan.' });
+    // Validasi input: pastikan 'operator' dikirim oleh front-end
+    if (!operator) {
+        return res.status(400).json({ error: 'Parameter "operator" dibutuhkan.' });
     }
 
     try {
@@ -37,22 +37,28 @@ export default async function handler(req, res) {
             body: JSON.stringify({
                 key: apiKey,
                 sign: sign,
-                type: type,
+                // --- PERBAIKAN DI SINI ---
+                // Menggunakan 'services' untuk mengambil semua jenis produk (pulsa, data, dll.)
+                // karena 'pulsa_paket' kemungkinan tidak dikenali oleh VIPayment.
+                type: 'services', 
                 operator: operator,
             }),
         });
 
-        // Jika request ke VIPayment gagal (misal: server mereka down)
+        // Jika request ke VIPayment gagal (misal: server mereka down atau request salah)
         if (!vipaymentResponse.ok) {
-            throw new Error('Gagal menghubungi server VIPayment.');
+            // Coba baca pesan error dari VIPayment untuk info lebih detail
+            const errorBody = await vipaymentResponse.text();
+            console.error("Respon error dari VIPayment:", errorBody);
+            throw new Error(`Gagal menghubungi server VIPayment (Status: ${vipaymentResponse.status}).`);
         }
 
         // Mengubah response dari VIPayment menjadi format JSON
         const result = await vipaymentResponse.json();
 
         // 5. Memeriksa hasil dari VIPayment
-        if (result.rc === '00') {
-            // Jika response code '00' berarti sukses
+        if (result.rc === '00' || result.result === true) { // Beberapa API menggunakan 'result'
+            // Jika response code '00' atau result true berarti sukses
             // Kirim kembali hanya data produknya ke front-end Anda
             res.status(200).json(result.data);
         } else {
