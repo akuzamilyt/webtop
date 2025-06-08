@@ -32,14 +32,15 @@ export default async function handler(req, res) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                // --- PERBAIKAN DI SINI ---
+                // Menambahkan User-Agent agar request terlihat seperti dari browser biasa
+                // untuk menghindari blokir dari sistem keamanan seperti Cloudflare.
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             },
             // Body/isi request yang dikirim ke VIPayment
             body: JSON.stringify({
                 key: apiKey,
                 sign: sign,
-                // --- PERBAIKAN DI SINI ---
-                // Menggunakan 'services' untuk mengambil semua jenis produk (pulsa, data, dll.)
-                // karena 'pulsa_paket' kemungkinan tidak dikenali oleh VIPayment.
                 type: 'services', 
                 operator: operator,
             }),
