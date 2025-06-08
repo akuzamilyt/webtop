@@ -2,80 +2,76 @@
 import crypto from 'crypto';
 
 // Ini adalah Vercel Serverless Function. 
-// 'req' adalah request yang masuk dari browser, 'res' adalah response yang akan kita kirim kembali.
 export default async function handler(req, res) {
-    // 1. Mengambil API keys dari Environment Variables yang sudah Anda atur di Vercel
+    // --- Langkah 1: Validasi Konfigurasi Server ---
+    // Memastikan API Key dan ID tersedia di Environment Variables Vercel.
     const apiKey = process.env.VIPAYMENT_API_KEY;
     const apiId = process.env.VIPAYMENT_API_ID;
 
-    // Jika salah satu key tidak ditemukan, kirim error. Ini penting untuk keamanan.
     if (!apiKey || !apiId) {
-        return res.status(500).json({ error: 'Konfigurasi API Key di server belum lengkap.' });
+        console.error("Kesalahan Konfigurasi: Kunci API atau ID tidak ditemukan di Vercel.");
+        return res.status(500).json({ error: 'Konfigurasi API di sisi server belum lengkap.' });
     }
 
-    // 2. Membuat 'sign' key sesuai dokumentasi VIPayment
-    // 'sign' adalah gabungan API ID dan API Key yang di-hash menggunakan MD5
+    // --- Langkah 2: Validasi Permintaan dari Klien ---
+    // Memastikan permintaan dari browser menyertakan parameter 'operator'.
+    const { operator } = req.query;
+    if (!operator) {
+        return res.status(400).json({ error: 'Parameter "operator" tidak disertakan dalam permintaan.' });
+    }
+
+    // --- Langkah 3: Membuat Signature (Tanda Tangan Digital) ---
+    // Sesuai dokumentasi VIPayment, signature adalah hash MD5 dari gabungan API ID dan API Key.
     const sign = crypto.createHash('md5').update(apiId + apiKey).digest('hex');
 
-    // 3. Mengambil parameter dari request front-end
-    // Contoh: /api/products?type=pulsa_paket&operator=telkomsel
-    const { operator } = req.query;
-
-    // Validasi input: pastikan 'operator' dikirim oleh front-end
-    if (!operator) {
-        return res.status(400).json({ error: 'Parameter "operator" dibutuhkan.' });
-    }
+    // --- Langkah 4: Mempersiapkan Body untuk Permintaan ke VIPayment ---
+    // Objek ini berisi semua data yang akan dikirim ke server VIPayment.
+    const requestBody = {
+        key: apiKey,
+        sign: sign,
+        type: 'services', // 'services' untuk mendapatkan semua produk (pulsa, data, dll)
+        operator: operator,
+    };
 
     try {
-        // 4. Mempersiapkan dan mengirim request ke server VIPayment
+        // --- Langkah 5: Mengirim Permintaan ke VIPayment ---
+        console.log("Mengirim permintaan ke VIPayment dengan body:", JSON.stringify(requestBody));
+
         const vipaymentResponse = await fetch('https://vip-reseller.co.id/api/prepaid', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                // --- PERBAIKAN FINAL ---
-                // Menambahkan semua header yang mungkin untuk meniru browser asli
-                // dan menghindari blokir dari Cloudflare.
-                'Accept': 'application/json, text/plain, */*',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
-                'Referer': 'https://vip-reseller.co.id/' // Menambahkan referer seolah-olah kita datang dari situs mereka
+                'Accept': 'application/json',
+                // User-Agent standar untuk menyamarkan permintaan sebagai browser biasa.
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             },
-            // Body/isi request yang dikirim ke VIPayment
-            body: JSON.stringify({
-                key: apiKey,
-                sign: sign,
-                type: 'services', 
-                operator: operator,
-            }),
+            body: JSON.stringify(requestBody),
         });
 
-        // Jika request ke VIPayment gagal (misal: server mereka down atau request salah)
+        // --- Langkah 6: Memeriksa Respon dari VIPayment ---
+        // Jika status bukan 2xx (misal: 403 Forbidden, 500 Internal Server Error), lempar error.
         if (!vipaymentResponse.ok) {
-            // Coba baca pesan error dari VIPayment untuk info lebih detail
-            const errorBody = await vipaymentResponse.text();
-            console.error("Respon error dari VIPayment:", errorBody);
-            throw new Error(`Gagal menghubungi server VIPayment (Status: ${vipaymentResponse.status}).`);
+            const errorText = await vipaymentResponse.text();
+            console.error("Respon error dari VIPayment:", errorText);
+            // Ini akan memunculkan halaman error Cloudflare di log Vercel Anda.
+            throw new Error(`Server VIPayment merespon dengan status ${vipaymentResponse.status}.`);
         }
 
-        // Mengubah response dari VIPayment menjadi format JSON
+        // Jika berhasil, ubah respon menjadi JSON.
         const result = await vipaymentResponse.json();
 
-        // 5. Memeriksa hasil dari VIPayment
-        if (result.rc === '00' || result.result === true) { // Beberapa API menggunakan 'result'
-            // Jika response code '00' atau result true berarti sukses
-            // Kirim kembali hanya data produknya ke front-end Anda
+        // --- Langkah 7: Mengirim Data atau Pesan Error ke Browser Anda ---
+        if (result.rc === '00' || result.result === true) {
+            // Sukses, kirim data produk ke browser.
             res.status(200).json(result.data);
         } else {
-            // Jika ada response code lain, berarti ada masalah dari sisi VIPayment
-            // Kirim pesan error dari VIPayment ke front-end untuk debugging
-            res.status(400).json({ error: `Error dari VIPayment: ${result.message}` });
+            // Gagal, kirim pesan error dari VIPayment ke browser.
+            res.status(400).json({ error: `Pesan dari VIPayment: ${result.message}` });
         }
 
     } catch (error) {
-        // 6. Menangani segala jenis error (network, dll)
-        console.error('Terjadi error di server function:', error);
-        res.status(500).json({ error: 'Terjadi kesalahan internal pada server.' });
+        // Menangkap semua kemungkinan error (network, dll) dan mengirim respon yang jelas.
+        console.error('Terjadi kesalahan fatal di server function:', error.message);
+        res.status(500).json({ error: 'Terjadi kesalahan di server saat mencoba menghubungi VIPayment.' });
     }
 }
