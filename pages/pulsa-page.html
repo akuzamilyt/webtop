@@ -51,7 +51,7 @@
         .product-item .harga { color: var(--primary-color); font-weight: 500; }
         .payment-method img { height: 25px; margin-bottom: 5px; object-fit: contain; }
         .loader { text-align: center; padding: 20px; }
-        .error-message { color: #dc3545; font-weight: 500; margin-top: 8px; min-height: 1.2em; }
+        .error-message { color: #dc3545; font-weight: 500; margin-top: 8px; min-height: 1.2em; text-align: center;}
         .summary-section { margin-top: 30px; background-color: #f8f9fa; padding: 20px; border-radius: 8px; }
         .summary-section p { margin: 5px 0; display: flex; justify-content: space-between; }
         /* Modal Styles */
@@ -95,7 +95,7 @@
                     <option value="">-- Pilih Provider --</option>
                     <option value="Telkomsel">Telkomsel</option>
                     <option value="Indosat">Indosat</option>
-                    <option value="XL Axiata">XL Axiata</option>
+                    <option value="XL">XL</option>
                     <option value="Axis">Axis</option>
                     <option value="Smartfren">Smartfren</option>
                     <option value="Three">Three</option>
@@ -103,14 +103,14 @@
             </div>
             
             <p id="fetchError" class="error-message"></p>
-            <div id="loader" class="loader" style="display: none;">Memuat produk...</div>
+            <div id="loader" class="loader" style="display: none;"></div>
 
             <div id="product-container" style="display: none;">
-                <div id="pulsa-section" class="product-section">
+                <div id="pulsa-section" class="product-section" style="display: none;">
                     <h2 class="section-title">Pilih Pulsa</h2>
                     <div id="pulsa-grid" class="product-grid"></div>
                 </div>
-                <div id="paket-data-section" class="product-section">
+                <div id="paket-data-section" class="product-section" style="display: none;">
                     <h2 class="section-title">Pilih Paket Data & Lainnya</h2>
                     <div id="paket-data-grid" class="product-grid"></div>
                 </div>
@@ -134,7 +134,7 @@
                  <p><span>Metode:</span> <span id="summary-method"></span></p>
             </div>
             <div class="input-group" style="margin-top: 25px;">
-                 <button class="btn btn-primary" id="buyBtn" disabled style="padding: 15px;">Lanjut ke Pembayaran</button>
+                 <button class="btn btn-primary" id="buyBtn" disabled>Lanjut ke Pembayaran</button>
             </div>
         </div>
     </main>
@@ -144,123 +144,249 @@
         <div class="modal-content">
             <span class="modal-close" id="modalCloseBtn">&times;</span>
             <h3>Scan QRIS untuk Membayar</h3>
-            <img id="qris-image" src="https://api.qr-code-generator.com/v1/create?access-token=h02zGrL7sUq2x3wS5a16kE_yEaG-L6h9sU41aL1qja4D0kY8_Y-lD5jF0lI0aI1u&qr_code_text=https%3A%2F%2Fza-prime.com%2Fpay&image_format=SVG" alt="QRIS Code">
+            <img id="qris-image" src="" alt="QRIS Code">
             <p>Total yang harus dibayar:</p>
             <p class="modal-amount" id="modal-amount"></p>
             <p style="font-size: 0.8rem; color: #666;">Setelah melakukan pembayaran, klik tombol di bawah ini. Pesanan akan diverifikasi oleh Admin.</p>
             <button class="btn btn-success" id="confirmPaymentBtn" style="width:100%;">Saya Sudah Bayar</button>
         </div>
     </div>
-<!-- Letakkan ini di bagian paling bawah file pulsa-page.html, tepat sebelum tag </body> -->
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        // --- PERIKSA DAN GANTI ID DI BAWAH INI ---
-        // Buka file pages/pulsa-page.html Anda dan cocokkan ID elemen di bawah ini.
-        // Jika ID di HTML Anda berbeda, ganti string di dalam getElementById('...')
-        
-        // Contoh: Jika di HTML Anda <select id="pilih-provider">, maka baris di bawah harus menjadi:
-        // const providerSelect = document.getElementById('pilih-provider');
+document.addEventListener('DOMContentLoaded', () => {
+    // === 1. PENGAMBILAN ELEMEN DARI HTML ===
+    // Mengambil semua elemen yang kita butuhkan dari HTML berdasarkan ID-nya.
+    const phoneNumberInput = document.getElementById('phoneNumber');
+    const providerSelect = document.getElementById('providerSelect');
+    const fetchError = document.getElementById('fetchError');
+    const loader = document.getElementById('loader');
+    const productContainer = document.getElementById('product-container');
+    const pulsaSection = document.getElementById('pulsa-section');
+    const pulsaGrid = document.getElementById('pulsa-grid');
+    const paketDataSection = document.getElementById('paket-data-section');
+    const paketDataGrid = document.getElementById('paket-data-grid');
+    const paymentSection = document.getElementById('payment-section');
+    const paymentMethodsContainer = document.querySelector('.payment-methods');
+    const summarySection = document.getElementById('summary');
+    const buyBtn = document.getElementById('buyBtn');
+    
+    // Elemen Ringkasan (Summary)
+    const summaryPhone = document.getElementById('summary-phone');
+    const summaryProduct = document.getElementById('summary-product');
+    const summaryPrice = document.getElementById('summary-price');
+    const summaryMethod = document.getElementById('summary-method');
 
-        const providerSelect = document.getElementById('provider-select'); // GANTI JIKA PERLU: ID untuk dropdown <select> provider.
-        const productContainer = document.getElementById('product-container'); // GANTI JIKA PERLU: ID untuk <div> yang akan menampung daftar produk.
-        const errorDisplay = document.getElementById('error-display');     // GANTI JIKA PERLU: ID untuk <p> atau <span> tempat pesan error muncul.
-        const LanjutButton = document.getElementById('lanjut-button');     // GANTI JIKA PERLU: ID untuk tombol <button> "Lanjut ke Pembayaran".
+    // Elemen Modal
+    const paymentModal = document.getElementById('paymentModal');
+    const modalCloseBtn = document.getElementById('modalCloseBtn');
+    const qrisImage = document.getElementById('qris-image');
+    const modalAmount = document.getElementById('modal-amount');
+    const confirmPaymentBtn = document.getElementById('confirmPaymentBtn');
 
-        // --- Fungsi untuk mengambil produk ---
-        async function fetchProducts(operator) {
-            // Pastikan elemen untuk menampilkan error dan tombol ada sebelum digunakan
-            if (errorDisplay) {
-                errorDisplay.textContent = 'Memuat produk...';
-                errorDisplay.classList.remove('text-red-500');
-                errorDisplay.classList.add('text-gray-500');
+    // === 2. STATE MANAGEMENT ===
+    // 'state' adalah objek untuk menyimpan semua data pilihan pengguna.
+    // Ini memudahkan kita mengelola data di satu tempat.
+    let state = {
+        phone: '',
+        provider: '',
+        product: null, // akan berisi objek produk lengkap
+        paymentMethod: null
+    };
+
+    // === 3. FUNGSI-FUNGSI UTAMA ===
+
+    /**
+     * Mengambil daftar produk dari API server kita (/api/products)
+     * @param {string} operator - Nama operator (contoh: 'Telkomsel')
+     */
+    async function fetchProducts(operator) {
+        loader.style.display = 'block';
+        fetchError.textContent = '';
+        productContainer.style.display = 'none';
+        paymentSection.style.display = 'none';
+        resetSelection();
+
+        try {
+            const response = await fetch(`/api/products?type=pulsa_paket&operator=${operator}`);
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({error: `Server merespon dengan status ${response.status}`}));
+                throw new Error(err.error);
             }
-            if (LanjutButton) {
-                LanjutButton.disabled = true; 
-            }
-
-            // Hapus produk lama
-            if (productContainer) {
-                productContainer.innerHTML = '';
-            }
-            
-            try {
-                // Membuat URL dengan parameter yang benar
-                const apiUrl = `/api/products?type=pulsa&operator=${operator}`;
-                
-                // Melakukan panggilan ke server API kita
-                const response = await fetch(apiUrl);
-
-                // Cek jika server merespon dengan error (seperti 404 atau 500)
-                if (!response.ok) {
-                    const errorResult = await response.json().catch(() => null);
-                    const serverMessage = errorResult ? errorResult.error : `Server merespon dengan status ${response.status}`;
-                    throw new Error(serverMessage);
-                }
-
-                // Jika berhasil, ubah response menjadi JSON
-                const products = await response.json();
-
-                if (!products || products.length === 0) {
-                   throw new Error('Tidak ada produk yang tersedia untuk provider ini.');
-                }
-                
-                // Sukses! Sembunyikan pesan status
-                if (errorDisplay) {
-                    errorDisplay.textContent = '';
-                }
-                displayProducts(products); 
-                if (LanjutButton) {
-                    LanjutButton.disabled = false;
-                }
-
-            } catch (error) {
-                console.error('Error fetching products:', error);
-                if (errorDisplay) {
-                    errorDisplay.textContent = `Error: ${error.message}`;
-                    errorDisplay.classList.add('text-red-500');
-                    errorDisplay.classList.remove('text-gray-500');
-                }
-            }
+            const products = await response.json();
+            displayProducts(products);
+        } catch (error) {
+            console.error('Error fetching products:', error);
+            fetchError.textContent = `Error: ${error.message}`;
+        } finally {
+            loader.style.display = 'none';
         }
+    }
 
-        // --- Fungsi untuk menampilkan produk ke halaman ---
-        function displayProducts(products) {
-            if (!productContainer) return; 
+    /**
+     * Menampilkan produk yang diterima dari API ke halaman web
+     * @param {Array} products - Array berisi objek-objek produk
+     */
+    function displayProducts(products) {
+        pulsaGrid.innerHTML = '';
+        paketDataGrid.innerHTML = '';
+        let pulsaCount = 0;
+        let paketDataCount = 0;
+
+        products.forEach(product => {
+            const isPulsa = product.category && product.category.toLowerCase() === 'pulsa';
+            const productElement = document.createElement('div');
+            productElement.className = 'product-item';
+            productElement.dataset.productCode = product.code;
+            productElement.innerHTML = `
+                <div class="nominal">${product.product_name}</div>
+                <div class="harga">Rp ${parseInt(product.price).toLocaleString('id-ID')}</div>
+            `;
             
-            // Contoh sederhana: membuat radio button untuk setiap produk
-            products.forEach(product => {
-                const productDiv = document.createElement('div');
-                productDiv.className = 'border rounded-md p-3 flex items-center justify-between my-2';
-                
-                productDiv.innerHTML = `
-                    <div>
-                        <p class="font-semibold">${product.product_name}</p>
-                        <p class="text-sm text-gray-600">Harga: Rp ${new Intl.NumberFormat('id-ID').format(product.price)}</p>
-                    </div>
-                    <input type="radio" name="product" value="${product.code}" class="form-radio h-5 w-5 text-indigo-600">
-                `;
-                productContainer.appendChild(productDiv);
-            });
-        }
+            // Simpan data lengkap produk di elemen untuk akses mudah nanti
+            productElement.productData = product;
 
-        // --- Event Listener ---
-        // Panggil fetchProducts saat pilihan provider berubah
-        if (providerSelect) {
-            providerSelect.addEventListener('change', () => {
-                const selectedOperator = providerSelect.value;
-                if (selectedOperator) {
-                    fetchProducts(selectedOperator);
-                } else {
-                    if (productContainer) productContainer.innerHTML = '';
-                    if (errorDisplay) errorDisplay.textContent = '';
-                }
-            });
+            if (isPulsa) {
+                pulsaGrid.appendChild(productElement);
+                pulsaCount++;
+            } else {
+                paketDataGrid.appendChild(productElement);
+                paketDataCount++;
+            }
+        });
+
+        pulsaSection.style.display = pulsaCount > 0 ? 'block' : 'none';
+        paketDataSection.style.display = paketDataCount > 0 ? 'block' : 'none';
+        productContainer.style.display = 'block';
+        paymentSection.style.display = 'block';
+    }
+
+    /**
+     * Mengupdate ringkasan pembelian berdasarkan 'state' saat ini
+     */
+    function updateSummary() {
+        if (state.phone && state.product && state.paymentMethod) {
+            summaryPhone.textContent = state.phone;
+            summaryProduct.textContent = state.product.product_name;
+            summaryPrice.textContent = `Rp ${parseInt(state.product.price).toLocaleString('id-ID')}`;
+            summaryMethod.textContent = state.paymentMethod;
+            summarySection.style.display = 'block';
         } else {
-            // Pesan ini akan muncul di Console jika dropdown provider tidak ditemukan
-            console.error("Elemen dropdown provider tidak ditemukan. Periksa kembali ID 'provider-select'.");
+            summarySection.style.display = 'none';
+        }
+        updateBuyButtonState();
+    }
+    
+    /**
+     * Mengaktifkan atau menonaktifkan tombol "Lanjut"
+     */
+    function updateBuyButtonState() {
+        buyBtn.disabled = !(state.phone && state.product && state.paymentMethod);
+    }
+    
+    /**
+     * Mengatur ulang pilihan produk dan metode bayar
+     */
+    function resetSelection() {
+        state.product = null;
+        state.paymentMethod = null;
+        document.querySelectorAll('.product-item.selected, .payment-method.selected').forEach(el => {
+            el.classList.remove('selected');
+        });
+        updateSummary();
+    }
+
+    // === 4. EVENT LISTENERS ===
+
+    // Ketika pengguna mengetik nomor telepon
+    phoneNumberInput.addEventListener('input', (e) => {
+        state.phone = e.target.value;
+        updateSummary();
+    });
+
+    // Ketika pengguna memilih provider dari dropdown
+    providerSelect.addEventListener('change', () => {
+        const selectedProvider = providerSelect.value;
+        state.provider = selectedProvider;
+        if (selectedProvider) {
+            fetchProducts(selectedProvider);
+        } else {
+            productContainer.style.display = 'none';
+            paymentSection.style.display = 'none';
+            resetSelection();
         }
     });
-</script>
 
+    // Ketika pengguna mengklik salah satu produk
+    productContainer.addEventListener('click', (e) => {
+        const selectedItem = e.target.closest('.product-item');
+        if (!selectedItem) return;
+
+        // Hapus seleksi dari item lain
+        document.querySelectorAll('.product-item.selected').forEach(el => el.classList.remove('selected'));
+        
+        // Tambahkan seleksi ke item yang diklik
+        selectedItem.classList.add('selected');
+        
+        // Simpan data produk ke state
+        state.product = selectedItem.productData;
+        updateSummary();
+    });
+
+    // Ketika pengguna mengklik metode pembayaran
+    paymentMethodsContainer.addEventListener('click', (e) => {
+        const selectedMethod = e.target.closest('.payment-method');
+        if (!selectedMethod) return;
+
+        document.querySelectorAll('.payment-method.selected').forEach(el => el.classList.remove('selected'));
+        selectedMethod.classList.add('selected');
+        state.paymentMethod = selectedMethod.dataset.method;
+        updateSummary();
+    });
+
+    // Ketika tombol "Lanjut ke Pembayaran" di-klik
+    buyBtn.addEventListener('click', () => {
+        const qrisText = `Pembayaran untuk ${state.product.product_name} ke nomor ${state.phone} sebesar Rp ${state.product.price}`;
+        const qrisUrl = `https://api.qr-code-generator.com/v1/create?access-token=h02zGrL7sUq2x3wS5a16kE_yEaG-L6h9sU41aL1qja4D0kY8_Y-lD5jF0lI0aI1u&qr_code_text=${encodeURIComponent(qrisText)}&image_format=SVG`;
+
+        qrisImage.src = qrisUrl;
+        modalAmount.textContent = `Rp ${parseInt(state.product.price).toLocaleString('id-ID')}`;
+        paymentModal.style.display = 'flex';
+    });
+
+    // Ketika tombol "Saya Sudah Bayar" di-klik
+    confirmPaymentBtn.addEventListener('click', async () => {
+        // Kirim notifikasi ke admin
+        const ntfyTopic = 'notif-zaprime-pelanggan0103'; // Ganti dengan topik Anda jika berbeda
+        try {
+            await fetch(`https://ntfy.sh/${ntfyTopic}`, {
+                method: 'POST',
+                body: `PESANAN BARU:\nNomor: ${state.phone}\nProduk: ${state.product.product_name}\nHarga: Rp ${state.product.price}`,
+                headers: { 'Title': '✅ Pesanan Baru Diterima!' }
+            });
+        } catch(e) {
+            console.error("Gagal mengirim notifikasi", e);
+        }
+
+        // Tampilkan pesan sukses dan reset form
+        alert('Terima kasih! Pesanan Anda akan segera diproses oleh Admin.');
+        paymentModal.style.display = 'none';
+        window.location.reload();
+    });
+    
+    // Menutup modal
+    modalCloseBtn.addEventListener('click', () => paymentModal.style.display = 'none');
+    paymentModal.addEventListener('click', (e) => {
+        if(e.target === paymentModal) {
+            paymentModal.style.display = 'none';
+        }
+    });
+
+    // Hamburger menu untuk mobile
+    const hamburger = document.getElementById('hamburger');
+    const navLinks = document.getElementById('navLinks');
+    hamburger.addEventListener('click', () => {
+        navLinks.classList.toggle('active');
+    });
+});
+</script>
 </body>
 </html>
