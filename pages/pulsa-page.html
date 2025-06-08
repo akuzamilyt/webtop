@@ -151,191 +151,103 @@
             <button class="btn btn-success" id="confirmPaymentBtn" style="width:100%;">Saya Sudah Bayar</button>
         </div>
     </div>
+<!-- Letakkan ini di bagian paling bawah file pulsa-page.html, tepat sebelum tag </body> -->
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- Deklarasi Elemen ---
+        const providerSelect = document.getElementById('provider-select'); // Ganti 'provider-select' dengan ID asli dari <select> provider Anda
+        const productContainer = document.getElementById('product-container'); // Ganti 'product-container' dengan ID dari <div> tempat produk akan ditampilkan
+        const errorDisplay = document.getElementById('error-display'); // Ganti 'error-display' dengan ID dari elemen untuk menampilkan error
+        const LanjutButton = document.getElementById('lanjut-button'); // Ganti 'lanjut-button' dengan ID asli tombol Anda
 
-    <script>
-        // DOM ELEMENTS
-        const phoneInput = document.getElementById('phoneNumber');
-        const providerSelect = document.getElementById('providerSelect');
-        const fetchError = document.getElementById('fetchError');
-        const loader = document.getElementById('loader');
-        const productContainer = document.getElementById('product-container');
-        const pulsaGrid = document.getElementById('pulsa-grid');
-        const paketDataGrid = document.getElementById('paket-data-grid');
-        const pulsaSection = document.getElementById('pulsa-section');
-        const paketDataSection = document.getElementById('paket-data-section');
-        const paymentSection = document.getElementById('payment-section');
-        const summarySection = document.getElementById('summary');
-        const summaryPhone = document.getElementById('summary-phone');
-        const summaryProduct = document.getElementById('summary-product');
-        const summaryPrice = document.getElementById('summary-price');
-        const summaryMethod = document.getElementById('summary-method');
-        const buyBtn = document.getElementById('buyBtn');
-        const hamburger = document.getElementById('hamburger');
-        const navLinks = document.getElementById('navLinks');
-        const paymentModal = document.getElementById('paymentModal');
-        const modalCloseBtn = document.getElementById('modalCloseBtn');
-        const modalAmount = document.getElementById('modal-amount');
-        const confirmPaymentBtn = document.getElementById('confirmPaymentBtn');
+        // --- Fungsi untuk mengambil produk ---
+        async function fetchProducts(operator) {
+            // Tampilkan status loading dan sembunyikan error lama
+            errorDisplay.textContent = 'Memuat produk...';
+            errorDisplay.classList.remove('text-red-500');
+            errorDisplay.classList.add('text-gray-500');
+            LanjutButton.disabled = true; // Nonaktifkan tombol saat loading
 
-        let selectedProduct = null;
-        let selectedPaymentMethod = null;
-
-        // EVENT LISTENERS
-        hamburger.addEventListener('click', () => { navLinks.classList.toggle('active'); });
-        providerSelect.addEventListener('change', fetchProducts);
-        document.querySelectorAll('.payment-method').forEach(el => el.addEventListener('click', () => handlePaymentSelection(el)));
-        buyBtn.addEventListener('click', proceedToPayment);
-        modalCloseBtn.addEventListener('click', () => { paymentModal.style.display = 'none'; });
-        confirmPaymentBtn.addEventListener('click', sendOrderToServer);
-        
-        // [FIXED] FUNGSI LENGKAP DIKEMBALIKAN
-        async function fetchProducts() {
-            const provider = providerSelect.value;
-            if (!provider) {
-                productContainer.style.display = 'none';
-                paymentSection.style.display = 'none';
-                return;
+            // Hapus produk lama
+            if(productContainer) {
+                productContainer.innerHTML = '';
             }
             
-            resetUI();
-            loader.style.display = 'block';
-            fetchError.textContent = '';
 
             try {
-                const response = await fetch('/api/pulsa-harga', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider }) });
+                // Membuat URL dengan parameter yang benar
+                const apiUrl = `/api/products?type=pulsa&operator=${operator}`;
+                
+                // Melakukan panggilan ke server API kita
+                const response = await fetch(apiUrl);
+
+                // Cek jika server merespon dengan error (seperti 404 atau 500)
                 if (!response.ok) {
-                    const err = await response.json().catch(() => ({ error: 'Gagal memproses respons server.'}));
-                    throw new Error(err.error || 'Gagal mengambil data produk.');
+                    // Coba baca pesan error dari server jika ada
+                    const errorResult = await response.json().catch(() => null);
+                    const serverMessage = errorResult ? errorResult.error : `Server merespon dengan status ${response.status}`;
+                    throw new Error(serverMessage);
                 }
-                const data = await response.json();
-                if (!data.pulsaNominal && !data.paketData) {
-                    throw new Error('Tidak ada produk yang tersedia untuk provider ini.');
+
+                // Jika berhasil, ubah response menjadi JSON
+                const products = await response.json();
+
+                // Cek jika array produk kosong
+                if (!products || products.length === 0) {
+                   throw new Error('Tidak ada produk yang tersedia untuk provider ini.');
                 }
-                displayProducts(data);
-                paymentSection.style.display = 'block';
+                
+                // Sukses! Sembunyikan pesan status
+                errorDisplay.textContent = '';
+                displayProducts(products); // Panggil fungsi untuk menampilkan produk
+                LanjutButton.disabled = false; // Aktifkan kembali tombolnya
+
             } catch (error) {
                 console.error('Error fetching products:', error);
-                fetchError.textContent = `Error: ${error.message}`;
-                productContainer.style.display = 'none';
-                paymentSection.style.display = 'none';
-            } finally {
-                loader.style.display = 'none';
+                // Tampilkan pesan error yang jelas ke pengguna
+                errorDisplay.textContent = `Error: ${error.message}`;
+                errorDisplay.classList.add('text-red-500');
+                errorDisplay.classList.remove('text-gray-500');
             }
         }
 
-        function displayProducts(data) {
-            pulsaGrid.innerHTML = '';
-            paketDataGrid.innerHTML = '';
-            if (data.pulsaNominal && data.pulsaNominal.length > 0) {
-                data.pulsaNominal.forEach(p => pulsaGrid.appendChild(createProductItem(p)));
-                pulsaSection.style.display = 'block';
-            } else {
-                 pulsaSection.style.display = 'none';
-            }
-            if (data.paketData && data.paketData.length > 0) {
-                data.paketData.forEach(p => paketDataGrid.appendChild(createProductItem(p)));
-                paketDataSection.style.display = 'block';
-            } else {
-                 paketDataSection.style.display = 'none';
-            }
-            productContainer.style.display = 'block';
-        }
-        
-        function createProductItem(product) {
-            const item = document.createElement('div');
-            item.className = 'product-item';
-            if (product.status !== 'available') {
-                item.classList.add('unavailable');
-            }
-            item.dataset.code = product.code;
-            item.dataset.nominal = product.nominal;
-            item.dataset.harga = product.harga;
-            item.innerHTML = `<div class="nominal">${product.nominal}</div><div class="harga">${product.harga}</div>`;
-            if (product.status === 'available') {
-                item.addEventListener('click', () => handleProductSelection(item));
-            }
-            return item;
-        }
-
-        function handleProductSelection(selectedElement) {
-            document.querySelectorAll('.product-item.selected').forEach(el => el.classList.remove('selected'));
-            selectedElement.classList.add('selected');
-            selectedProduct = selectedElement.dataset;
-            updateSummary();
-        }
-
-        function handlePaymentSelection(selectedElement) {
-            document.querySelectorAll('.payment-method.selected').forEach(el => el.classList.remove('selected'));
-            selectedElement.classList.add('selected');
-            selectedPaymentMethod = selectedElement.dataset.method;
-            updateSummary();
-        }
-
-        function updateSummary() {
-            if (phoneInput.value && selectedProduct && selectedPaymentMethod) {
-                summaryPhone.textContent = phoneInput.value;
-                summaryProduct.textContent = selectedProduct.nominal;
-                summaryPrice.textContent = selectedProduct.harga;
-                summaryMethod.textContent = selectedPaymentMethod;
-                summarySection.style.display = 'block';
-                buyBtn.disabled = false;
-            } else {
-                summarySection.style.display = 'none';
-                buyBtn.disabled = true;
-            }
-        }
-
-        function resetUI() {
-            selectedProduct = null;
-            selectedPaymentMethod = null;
-            document.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
-            updateSummary();
-            productContainer.style.display = 'none';
-            paymentSection.style.display = 'none';
-        }
-
-        function proceedToPayment() {
-            if (!phoneInput.value || !selectedProduct || !selectedPaymentMethod) {
-                alert('Silakan isi nomor telepon, pilih produk, dan metode pembayaran terlebih dahulu.');
-                return;
-            }
-            modalAmount.textContent = selectedProduct.harga;
-            paymentModal.style.display = 'flex';
-        }
-
-        async function sendOrderToServer() {
-            const dataPesanan = {
-                phoneNumber: phoneInput.value,
-                nominal: selectedProduct.nominal,
-                harga: selectedProduct.harga,
-                code: selectedProduct.code,
-                paymentMethod: selectedPaymentMethod
-            };
-            if (!dataPesanan.code) { alert('Terjadi kesalahan: Kode produk tidak valid.'); return; }
+        // --- Fungsi untuk menampilkan produk ke halaman ---
+        function displayProducts(products) {
+            if(!productContainer) return; // Keluar jika tidak ada kontainer produk
             
-            confirmPaymentBtn.disabled = true;
-            confirmPaymentBtn.textContent = 'Memproses...';
-
-            try {
-                const response = await fetch('/api/pending-order-notification', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dataPesanan) });
-                const hasil = await response.json();
-                if (response.ok && hasil.success) {
-                    alert('Pesanan berhasil dibuat! Anda bisa melihat statusnya di halaman Riwayat.');
-                    paymentModal.style.display = 'none';
-                    resetUI();
-                    providerSelect.value = '';
-                    phoneInput.value = '';
-                } else {
-                    throw new Error(hasil.error || 'Gagal mengirim pesanan ke server.');
-                }
-            } catch (error) {
-                console.error('Error saat konfirmasi pembayaran:', error);
-                alert(`Terjadi kesalahan: ${error.message}`);
-            } finally {
-                confirmPaymentBtn.disabled = false;
-                confirmPaymentBtn.textContent = 'Saya Sudah Bayar';
-            }
+            // Contoh sederhana: membuat radio button untuk setiap produk
+            products.forEach(product => {
+                const productDiv = document.createElement('div');
+                productDiv.className = 'border rounded-md p-3 flex items-center justify-between';
+                
+                productDiv.innerHTML = `
+                    <div>
+                        <p class="font-semibold">${product.product_name}</p>
+                        <p class="text-sm text-gray-600">Harga: Rp ${new Intl.NumberFormat('id-ID').format(product.price)}</p>
+                    </div>
+                    <input type="radio" name="product" value="${product.code}" class="form-radio h-5 w-5 text-indigo-600">
+                `;
+                productContainer.appendChild(productDiv);
+            });
         }
-    </script>
+
+
+        // --- Event Listener ---
+        // Panggil fetchProducts saat pilihan provider berubah
+        if(providerSelect){
+            providerSelect.addEventListener('change', () => {
+                const selectedOperator = providerSelect.value;
+                if (selectedOperator) {
+                    fetchProducts(selectedOperator);
+                } else {
+                    // Kosongkan jika tidak ada provider yang dipilih
+                    if(productContainer) productContainer.innerHTML = '';
+                    errorDisplay.textContent = '';
+                }
+            });
+        }
+    });
+</script>
+
 </body>
 </html>
