@@ -33,8 +33,10 @@ export default async function handler(req, res) {
             headers: {
                 'Content-Type': 'application/json',
                 // --- PERBAIKAN DI SINI ---
-                // Menambahkan User-Agent agar request terlihat seperti dari browser biasa
+                // Menambahkan lebih banyak header agar request terlihat seperti dari browser asli
                 // untuk menghindari blokir dari sistem keamanan seperti Cloudflare.
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             },
             // Body/isi request yang dikirim ke VIPayment
