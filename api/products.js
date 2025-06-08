@@ -32,12 +32,15 @@ export default async function handler(req, res) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                // --- PERBAIKAN DI SINI ---
-                // Menambahkan lebih banyak header agar request terlihat seperti dari browser asli
-                // untuk menghindari blokir dari sistem keamanan seperti Cloudflare.
+                // --- PERBAIKAN FINAL ---
+                // Menambahkan semua header yang mungkin untuk meniru browser asli
+                // dan menghindari blokir dari Cloudflare.
                 'Accept': 'application/json, text/plain, */*',
                 'Accept-Language': 'en-US,en;q=0.9',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Referer': 'https://vip-reseller.co.id/' // Menambahkan referer seolah-olah kita datang dari situs mereka
             },
             // Body/isi request yang dikirim ke VIPayment
             body: JSON.stringify({
